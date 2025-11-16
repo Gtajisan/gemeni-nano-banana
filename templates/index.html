@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Photo Editor - Gemini</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎨 AI Photo Editor</h1>
+            <p>Edit your photos with AI-powered Gemini</p>
+        </header>
+
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <div class="message bot-message">
+                    <div class="message-content">
+                        <p>👋 Welcome! Upload an image and tell me how you'd like to edit it.</p>
+                        <p class="hint">Examples: "Change background to beach sunset", "Add sunglasses", "Make it black and white", "Remove background"</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-container">
+                <div class="upload-section" id="uploadSection">
+                    <input type="file" id="imageInput" accept="image/*" style="display: none;">
+                    <button class="upload-btn" id="uploadBtn">
+                        📤 Upload Image
+                    </button>
+                    <div class="preview-container" id="previewContainer" style="display: none;">
+                        <img id="imagePreview" alt="Preview">
+                        <button class="remove-btn" id="removeBtn">✕</button>
+                    </div>
+                </div>
+
+                <div class="prompt-section">
+                    <textarea 
+                        id="promptInput" 
+                        placeholder="Describe how you want to edit the image..."
+                        rows="2"
+                    ></textarea>
+                    <button class="send-btn" id="sendBtn" disabled>
+                        <span id="btnText">✨ Edit Image</span>
+                        <span id="btnLoader" style="display: none;">⏳ Processing...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const previewContainer = document.getElementById('previewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const removeBtn = document.getElementById('removeBtn');
+        const promptInput = document.getElementById('promptInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const btnText = document.getElementById('btnText');
+        const btnLoader = document.getElementById('btnLoader');
+        const messagesContainer = document.getElementById('messages');
+
+        let selectedFile = null;
+
+        uploadBtn.addEventListener('click', () => imageInput.click());
+
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                selectedFile = file;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    imagePreview.src = event.target.result;
+                    previewContainer.style.display = 'block';
+                    uploadBtn.style.display = 'none';
+                    updateSendButton();
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        removeBtn.addEventListener('click', () => {
+            selectedFile = null;
+            imageInput.value = '';
+            previewContainer.style.display = 'none';
+            uploadBtn.style.display = 'block';
+            updateSendButton();
+        });
+
+        promptInput.addEventListener('input', updateSendButton);
+
+        function updateSendButton() {
+            sendBtn.disabled = !selectedFile || !promptInput.value.trim();
+        }
+
+        function addMessage(type, content, imageUrl = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            if (imageUrl) {
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.className = 'result-image';
+                contentDiv.appendChild(img);
+            }
+            
+            const p = document.createElement('p');
+            p.textContent = content;
+            contentDiv.appendChild(p);
+            
+            messageDiv.appendChild(contentDiv);
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        sendBtn.addEventListener('click', async () => {
+            if (!selectedFile || !promptInput.value.trim()) return;
+
+            const prompt = promptInput.value.trim();
+            
+            addMessage('user', `Edit request: "${prompt}"`);
+            
+            btnText.style.display = 'none';
+            btnLoader.style.display = 'inline';
+            sendBtn.disabled = true;
+            promptInput.disabled = true;
+
+            const formData = new FormData();
+            formData.append('image', selectedFile);
+            formData.append('prompt', prompt);
+
+            try {
+                const response = await fetch('/edit-image', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    addMessage('bot', data.message, data.image);
+                    
+                    selectedFile = null;
+                    imageInput.value = '';
+                    previewContainer.style.display = 'none';
+                    uploadBtn.style.display = 'block';
+                    promptInput.value = '';
+                } else {
+                    addMessage('bot', `❌ Error: ${data.error}`);
+                }
+            } catch (error) {
+                addMessage('bot', `❌ Error: ${error.message}`);
+            } finally {
+                btnText.style.display = 'inline';
+                btnLoader.style.display = 'none';
+                sendBtn.disabled = false;
+                promptInput.disabled = false;
+                updateSendButton();
+            }
+        });
+
+        promptInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!sendBtn.disabled) {
+                    sendBtn.click();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
