@@ -52,8 +52,8 @@ def edit_image():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         
-        replit_domain = os.environ.get('REPLIT_DEV_DOMAIN', 'localhost:5000')
-        image_url = f"https://{replit_domain}/uploads/{filename}"
+        base_url = request.host_url.rstrip('/')
+        image_url = f"{base_url}/uploads/{filename}"
         
         logging.info(f"Processing image edit request with prompt: {prompt}")
         logging.info(f"Image URL: {image_url}")

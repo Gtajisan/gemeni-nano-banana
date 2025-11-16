@@ -17,33 +17,27 @@
             <div class="messages" id="messages">
                 <div class="message bot-message">
                     <div class="message-content">
-                        <p>👋 Welcome! Upload an image and tell me how you'd like to edit it.</p>
-                        <p class="hint">Examples: "Change background to beach sunset", "Add sunglasses", "Make it black and white", "Remove background"</p>
+                        <p>👋 Hello! I can help you edit images using AI.</p>
+                        <p class="hint">Upload an image and describe how you'd like to edit it. For example: "Change background to beach sunset" or "Make it look like a painting"</p>
                     </div>
                 </div>
             </div>
 
             <div class="input-container">
-                <div class="upload-section" id="uploadSection">
-                    <input type="file" id="imageInput" accept="image/*" style="display: none;">
-                    <button class="upload-btn" id="uploadBtn">
-                        📤 Upload Image
+                <input type="file" id="imageInput" accept="image/*" style="display: none;">
+                
+                <div class="input-wrapper">
+                    <button class="attach-btn" id="attachBtn" title="Upload image">
+                        📎
                     </button>
-                    <div class="preview-container" id="previewContainer" style="display: none;">
-                        <img id="imagePreview" alt="Preview">
-                        <button class="remove-btn" id="removeBtn">✕</button>
-                    </div>
-                </div>
-
-                <div class="prompt-section">
                     <textarea 
                         id="promptInput" 
-                        placeholder="Describe how you want to edit the image..."
-                        rows="2"
+                        placeholder="Upload an image and describe how to edit it..."
+                        rows="1"
                     ></textarea>
                     <button class="send-btn" id="sendBtn" disabled>
-                        <span id="btnText">✨ Edit Image</span>
-                        <span id="btnLoader" style="display: none;">⏳ Processing...</span>
+                        <span id="sendIcon">➤</span>
+                        <span id="sendLoader" style="display: none;">⏳</span>
                     </button>
                 </div>
             </div>
@@ -52,50 +46,50 @@
 
     <script>
         const imageInput = document.getElementById('imageInput');
-        const uploadBtn = document.getElementById('uploadBtn');
-        const previewContainer = document.getElementById('previewContainer');
-        const imagePreview = document.getElementById('imagePreview');
-        const removeBtn = document.getElementById('removeBtn');
+        const attachBtn = document.getElementById('attachBtn');
         const promptInput = document.getElementById('promptInput');
         const sendBtn = document.getElementById('sendBtn');
-        const btnText = document.getElementById('btnText');
-        const btnLoader = document.getElementById('btnLoader');
+        const sendIcon = document.getElementById('sendIcon');
+        const sendLoader = document.getElementById('sendLoader');
         const messagesContainer = document.getElementById('messages');
 
-        let selectedFile = null;
+        let currentImage = null;
+        let lastEditedImageUrl = null;
 
-        uploadBtn.addEventListener('click', () => imageInput.click());
+        attachBtn.addEventListener('click', () => imageInput.click());
 
         imageInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
-                selectedFile = file;
+                currentImage = file;
+                
                 const reader = new FileReader();
                 reader.onload = (event) => {
-                    imagePreview.src = event.target.result;
-                    previewContainer.style.display = 'block';
-                    uploadBtn.style.display = 'none';
+                    addMessage('user', `🖼️ Uploaded image`, event.target.result);
+                    
+                    setTimeout(() => {
+                        addMessage('bot', 'Great! Now tell me how you would like to edit this image.');
+                    }, 500);
+                    
+                    promptInput.placeholder = "Describe your edit (e.g., 'make it black and white', 'add sunglasses')...";
+                    promptInput.focus();
                     updateSendButton();
                 };
                 reader.readAsDataURL(file);
             }
         });
 
-        removeBtn.addEventListener('click', () => {
-            selectedFile = null;
-            imageInput.value = '';
-            previewContainer.style.display = 'none';
-            uploadBtn.style.display = 'block';
+        promptInput.addEventListener('input', () => {
+            promptInput.style.height = 'auto';
+            promptInput.style.height = Math.min(promptInput.scrollHeight, 150) + 'px';
             updateSendButton();
         });
 
-        promptInput.addEventListener('input', updateSendButton);
-
         function updateSendButton() {
-            sendBtn.disabled = !selectedFile || !promptInput.value.trim();
+            sendBtn.disabled = !(currentImage && promptInput.value.trim());
         }
 
-        function addMessage(type, content, imageUrl = null) {
+        function addMessage(type, text, imageUrl = null) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}-message`;
             
@@ -103,15 +97,22 @@
             contentDiv.className = 'message-content';
             
             if (imageUrl) {
+                const imgContainer = document.createElement('div');
+                imgContainer.className = 'image-container';
+                
                 const img = document.createElement('img');
                 img.src = imageUrl;
-                img.className = 'result-image';
-                contentDiv.appendChild(img);
+                img.className = 'chat-image';
+                
+                imgContainer.appendChild(img);
+                contentDiv.appendChild(imgContainer);
             }
             
-            const p = document.createElement('p');
-            p.textContent = content;
-            contentDiv.appendChild(p);
+            if (text) {
+                const p = document.createElement('p');
+                p.innerHTML = text;
+                contentDiv.appendChild(p);
+            }
             
             messageDiv.appendChild(contentDiv);
             messagesContainer.appendChild(messageDiv);
@@ -119,22 +120,26 @@
         }
 
         sendBtn.addEventListener('click', async () => {
-            if (!selectedFile || !promptInput.value.trim()) return;
+            if (!currentImage || !promptInput.value.trim()) return;
 
             const prompt = promptInput.value.trim();
             
-            addMessage('user', `Edit request: "${prompt}"`);
+            addMessage('user', prompt);
             
-            btnText.style.display = 'none';
-            btnLoader.style.display = 'inline';
+            promptInput.value = '';
+            promptInput.style.height = 'auto';
+            sendIcon.style.display = 'none';
+            sendLoader.style.display = 'inline';
             sendBtn.disabled = true;
             promptInput.disabled = true;
 
             const formData = new FormData();
-            formData.append('image', selectedFile);
+            formData.append('image', currentImage);
             formData.append('prompt', prompt);
 
             try {
+                addMessage('bot', '⏳ Processing your image... This may take 20-30 seconds.');
+
                 const response = await fetch('/edit-image', {
                     method: 'POST',
                     body: formData
@@ -142,25 +147,39 @@
 
                 const data = await response.json();
 
+                messagesContainer.lastChild.remove();
+
                 if (data.success) {
-                    addMessage('bot', data.message, data.image);
+                    addMessage('bot', '✨ Here\'s your edited image:', data.image);
+                    lastEditedImageUrl = data.image;
                     
-                    selectedFile = null;
-                    imageInput.value = '';
-                    previewContainer.style.display = 'none';
-                    uploadBtn.style.display = 'block';
-                    promptInput.value = '';
+                    try {
+                        const imageResponse = await fetch(data.image);
+                        const imageBlob = await imageResponse.blob();
+                        currentImage = new File([imageBlob], 'edited_image.png', { type: 'image/png' });
+                        
+                        setTimeout(() => {
+                            addMessage('bot', 'Want to edit it further? Just describe what you\'d like to change!');
+                        }, 1000);
+                    } catch (err) {
+                        console.error('Error updating current image:', err);
+                        setTimeout(() => {
+                            addMessage('bot', 'Image edited successfully! Upload a new image to edit again.');
+                        }, 1000);
+                    }
                 } else {
-                    addMessage('bot', `❌ Error: ${data.error}`);
+                    addMessage('bot', `❌ ${data.error}`);
                 }
             } catch (error) {
+                messagesContainer.lastChild.remove();
                 addMessage('bot', `❌ Error: ${error.message}`);
             } finally {
-                btnText.style.display = 'inline';
-                btnLoader.style.display = 'none';
+                sendIcon.style.display = 'inline';
+                sendLoader.style.display = 'none';
                 sendBtn.disabled = false;
                 promptInput.disabled = false;
                 updateSendButton();
+                promptInput.focus();
             }
         });
 
@@ -172,6 +191,8 @@
                 }
             }
         });
+
+        updateSendButton();
     </script>
 </body>
 </html>
